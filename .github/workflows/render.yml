@@ -28,7 +28,7 @@ jobs:
           mkdir -p /tmp/src
           curl -fsSL "https://codeload.github.com/Olexify/FennekOS/tar.gz/$REF" \
             | tar xz -C /tmp/src --strip-components=5 --wildcards '*/system_files/usr/share/fennek/*.svg'
-          J="-background #000 -flatten -quality 90 -sampling-factor 4:2:0 -strip"
+          J="-background #000 -flatten -quality 95 -sampling-factor 4:4:4 -strip"   # full colour detail: thin lines stay crisp
           for p in theme-amber:Amber theme-sakura:Sakura theme-royal:Royal theme-arcade:Arcade \
                    wallpaper-classic:Fennek-Classic leonote-night:Leonote-Night leonote-graph:Leonote-Graph \
                    leonote-paper:Leonote-Paper; do
