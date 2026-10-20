@@ -35,6 +35,9 @@ jobs:
             magick -background none "/tmp/src/${p%%:*}.svg" $J "${p#*:}.jpg"
           done
           echo "$REF" > SOURCE
+          # Small previews (what Personalize shows before anything is downloaded), for every picture here
+          mkdir -p previews
+          for f in *.jpg; do magick "$f" -resize 480x270^ -gravity center -extent 480x270 -quality 78 -strip "previews/$f"; done
       - name: Manifest
         run: |
           python3 - <<'EOF'
@@ -44,7 +47,10 @@ jobs:
               size = subprocess.run(["magick", "identify", "-format", "%w %h", f], capture_output=True, text=True).stdout.split()
               out.append({"name": f[:-4].replace("-", " "), "file": f, "bytes": os.path.getsize(f),
                           "width": int(size[0]), "height": int(size[1]),
-                          "sha256": hashlib.sha256(open(f, "rb").read()).hexdigest()})
+                          "sha256": hashlib.sha256(open(f, "rb").read()).hexdigest(),
+                          "preview": "previews/" + f,
+                          "preview_bytes": os.path.getsize("previews/" + f),
+                          "preview_sha256": hashlib.sha256(open("previews/" + f, "rb").read()).hexdigest()})
           json.dump(out, open("manifest.json", "w"), indent=1)
           print(json.dumps(out, indent=1))
           EOF
