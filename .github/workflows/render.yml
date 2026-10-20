@@ -1,0 +1,57 @@
+# Renders the Fennek OS wallpapers from their vector sources in the FennekOS repo (system_files/usr/share/fennek/*.svg)
+# into 4K JPEGs, writes manifest.json (file, size, SHA-256) and commits them here. Fennek OS downloads a picture only
+# when someone picks it, and checks it against the SHA-256 it was built with.
+# Run by hand after a wallpaper changes: Actions > render > Run workflow (fennek_ref: a FennekOS commit or branch).
+name: render
+on:
+  workflow_dispatch:
+    inputs:
+      fennek_ref:
+        description: FennekOS commit or branch to take the sources from
+        default: main
+permissions:
+  contents: write
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Tools and fonts (the same as the Fennek OS build)
+        run: dnf -y install git ImageMagick librsvg2-tools google-noto-serif-vf-fonts google-noto-sans-vf-fonts rsms-inter-fonts cascadia-mono-fonts python3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Render
+        env:
+          REF: ${{ inputs.fennek_ref }}
+        run: |
+          set -euo pipefail
+          [[ $REF =~ ^[A-Za-z0-9._/-]+$ ]]
+          mkdir -p /tmp/src
+          curl -fsSL "https://codeload.github.com/Olexify/FennekOS/tar.gz/$REF" \
+            | tar xz -C /tmp/src --strip-components=5 --wildcards '*/system_files/usr/share/fennek/*.svg'
+          J="-background #000 -flatten -quality 90 -sampling-factor 4:2:0 -strip"
+          for p in theme-amber:Amber theme-sakura:Sakura theme-royal:Royal theme-arcade:Arcade \
+                   wallpaper-classic:Fennek-Classic leonote-night:Leonote-Night leonote-graph:Leonote-Graph \
+                   leonote-paper:Leonote-Paper; do
+            magick -background none "/tmp/src/${p%%:*}.svg" $J "${p#*:}.jpg"
+          done
+          echo "$REF" > SOURCE
+      - name: Manifest
+        run: |
+          python3 - <<'EOF'
+          import hashlib, json, os, subprocess
+          out = []
+          for f in sorted(x for x in os.listdir(".") if x.endswith(".jpg")):
+              size = subprocess.run(["magick", "identify", "-format", "%w %h", f], capture_output=True, text=True).stdout.split()
+              out.append({"name": f[:-4].replace("-", " "), "file": f, "bytes": os.path.getsize(f),
+                          "width": int(size[0]), "height": int(size[1]),
+                          "sha256": hashlib.sha256(open(f, "rb").read()).hexdigest()})
+          json.dump(out, open("manifest.json", "w"), indent=1)
+          print(json.dumps(out, indent=1))
+          EOF
+      - name: Commit
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git config user.name "fennek-wallpapers"
+          git config user.email "fennek-wallpapers@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || { git commit -qm "Wallpapers rendered from FennekOS $(cat SOURCE)"; git push; }
